@@ -25,19 +25,19 @@ fn main() {
 
     let red_mip_levels = mip_levels_sizes.iter()
         .map(|(_index, level_size)|{
-            FlatSamples::F32(vec![0.1_f32; level_size.area() ])
+            FlatSamples::F32(vec![0.1_f32; level_size.area() ].into())
         })
         .collect();
 
     let green_mip_levels = mip_levels_sizes.iter()
         .map(|(_index, level_size)|{
-            FlatSamples::F32(vec![0.6_f32; level_size.area() ])
+            FlatSamples::F32(vec![0.6_f32; level_size.area() ].into())
         })
         .collect();
 
     let blue_mip_levels = mip_levels_sizes.iter()
         .map(|(_index, level_size)|{
-            FlatSamples::F32(vec![1.0_f32; level_size.area() ])
+            FlatSamples::F32(vec![1.0_f32; level_size.area() ].into())
         })
         .collect();
 

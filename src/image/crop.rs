@@ -1,6 +1,7 @@
 //! Crop away unwanted pixels. Includes automatic detection of bounding rectangle.
 //! Currently does not support deep data and resolution levels.
 
+use std::borrow::Cow;
 use crate::meta::attribute::{IntegerBounds, LevelMode, ChannelList};
 use crate::math::{Vec2, RoundingMode};
 use crate::image::{Layer, FlatSamples, SpecificChannels, AnyChannels, FlatSamplesPixel, AnyChannel};
@@ -205,7 +206,7 @@ impl<Samples, Channels> InspectSample for Layer<SpecificChannels<Samples, Channe
     }
 }
 
-impl InspectSample for Layer<AnyChannels<FlatSamples>> {
+impl<'a> InspectSample for Layer<AnyChannels<FlatSamples<'a>>> {
     type Sample = FlatSamplesPixel;
 
     fn inspect_sample(&self, local_index: Vec2<usize>) -> FlatSamplesPixel {
@@ -231,8 +232,8 @@ pub trait ApplyCroppedView {
     fn reallocate_cropped(self) -> Self::Reallocated;
 }
 
-impl ApplyCroppedView for Layer<CroppedChannels<AnyChannels<FlatSamples>>> {
-    type Reallocated = Layer<AnyChannels<FlatSamples>>;
+impl<'a> ApplyCroppedView for Layer<CroppedChannels<AnyChannels<FlatSamples<'a>>>> {
+    type Reallocated = Layer<AnyChannels<FlatSamples<'a>>>;
 
     fn reallocate_cropped(self) -> Self::Reallocated {
         let cropped_absolute_bounds = self.channel_data.cropped_bounds;
@@ -255,8 +256,8 @@ impl ApplyCroppedView for Layer<CroppedChannels<AnyChannels<FlatSamples>>> {
                 let old_width = self.channel_data.full_bounds.size.width();
                 let new_height = cropped_relative_bounds.size.height();
 
-                let channels = self.channel_data.full_channels.list.into_iter().map(|channel: AnyChannel<FlatSamples>| {
-                    fn crop_samples<T:Copy>(samples: Vec<T>, old_width: usize, new_height: usize, x_range: std::ops::Range<usize>, y_start: usize) -> Vec<T> {
+                let channels = self.channel_data.full_channels.list.into_iter().map(|channel: AnyChannel<FlatSamples<'_>>| {
+                    fn crop_samples<T:Copy>(samples: &[T], old_width: usize, new_height: usize, x_range: std::ops::Range<usize>, y_start: usize) -> Vec<T> {
                         let filtered_lines = samples.chunks_exact(old_width).skip(y_start).take(new_height);
                         let trimmed_lines = filtered_lines.map(|line| &line[x_range.clone()]);
                         trimmed_lines.flatten().map(|x|*x).collect() // TODO does this use memcpy?
@@ -264,15 +265,15 @@ impl ApplyCroppedView for Layer<CroppedChannels<AnyChannels<FlatSamples>>> {
 
                     let samples = match channel.sample_data {
                         FlatSamples::F16(samples) => FlatSamples::F16(crop_samples(
-                            samples, old_width, new_height, x_range.clone(), start_y
+                            &samples, old_width, new_height, x_range.clone(), start_y
                         )),
 
-                        FlatSamples::F32(samples) => FlatSamples::F32(crop_samples(
-                            samples, old_width, new_height, x_range.clone(), start_y
-                        )),
+                        FlatSamples::F32(samples) => FlatSamples::F32(Cow::Owned(crop_samples(
+                            samples.as_ref(), old_width, new_height, x_range.clone(), start_y
+                        ))),
 
                         FlatSamples::U32(samples) => FlatSamples::U32(crop_samples(
-                            samples, old_width, new_height, x_range.clone(), start_y
+                            &samples, old_width, new_height, x_range.clone(), start_y
                         )),
                     };
 

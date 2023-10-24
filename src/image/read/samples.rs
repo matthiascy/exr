@@ -43,7 +43,7 @@ impl ReadFlatSamples {
 pub struct FlatSamplesReader {
     level: Vec2<usize>,
     resolution: Vec2<usize>,
-    samples: FlatSamples
+    samples: FlatSamples<'static>
 }
 
 
@@ -64,7 +64,7 @@ impl ReadSamplesLevel for ReadFlatSamples {
             level, resolution, // TODO sampling
             samples: match channel.sample_type {
                 SampleType::F16 => FlatSamples::F16(vec![f16::ZERO; resolution.area()]),
-                SampleType::F32 => FlatSamples::F32(vec![0.0; resolution.area()]),
+                SampleType::F32 => FlatSamples::F32(Cow::Owned(vec![0.0; resolution.area()])),
                 SampleType::U32 => FlatSamples::U32(vec![0; resolution.area()]),
             }
         })
@@ -73,7 +73,7 @@ impl ReadSamplesLevel for ReadFlatSamples {
 
 
 impl SamplesReader for FlatSamplesReader {
-    type Samples = FlatSamples;
+    type Samples = FlatSamples<'static>;
 
     fn filter_block(&self, tile: TileCoordinates) -> bool {
         tile.level_index == self.level
@@ -104,7 +104,7 @@ impl SamplesReader for FlatSamplesReader {
                     .expect("writing line bytes failed"),
 
             FlatSamples::F32(samples) =>
-                line.read_samples_into_slice(&mut samples[start_index .. end_index])
+                line.read_samples_into_slice(&mut samples.to_mut()[start_index .. end_index])
                     .expect("writing line bytes failed"),
 
             FlatSamples::U32(samples) =>
@@ -115,7 +115,7 @@ impl SamplesReader for FlatSamplesReader {
         Ok(())
     }
 
-    fn into_samples(self) -> FlatSamples {
+    fn into_samples(self) -> FlatSamples<'static> {
         self.samples
     }
 }

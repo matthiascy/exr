@@ -31,6 +31,7 @@ pub mod recursive;
 // pub mod channel_groups;
 
 
+use std::borrow::Cow;
 use crate::meta::header::{ImageAttributes, LayerAttributes};
 use crate::meta::attribute::{Text, LineOrder};
 use half::f16;
@@ -44,11 +45,11 @@ pub(crate) fn ignore_progress(_progress: f64){}
 
 /// This image type contains all supported exr features and can represent almost any image.
 /// It currently does not support deep data yet.
-pub type AnyImage = Image<Layers<AnyChannels<Levels<FlatSamples>>>>;
+pub type AnyImage<'a> = Image<Layers<AnyChannels<Levels<FlatSamples<'a>>>>>;
 
 /// This image type contains the most common exr features and can represent almost any plain image.
 /// Does not contain resolution levels. Does not support deep data.
-pub type FlatImage = Image<Layers<AnyChannels<FlatSamples>>>;
+pub type FlatImage<'a> = Image<Layers<AnyChannels<FlatSamples<'a>>>>;
 
 /// This image type contains multiple layers, with each layer containing a user-defined type of pixels.
 pub type PixelLayersImage<Storage, Channels> = Image<Layers<SpecificChannels<Storage, Channels>>>;
@@ -265,13 +266,13 @@ pub enum DeepAndFlatSamples {
 /// Using a different storage, for example `SpecificChannels`,
 /// will probably be slower.
 #[derive(Clone, PartialEq)] // debug is implemented manually
-pub enum FlatSamples {
+pub enum FlatSamples<'a> {
 
     /// A vector of non-deep `f16` values.
     F16(Vec<f16>),
 
     /// A vector of non-deep `f32` values.
-    F32(Vec<f32>),
+    F32(Cow<'a, [f32]>),
 
     /// A vector of non-deep `u32` values.
     U32(Vec<u32>),
@@ -493,15 +494,15 @@ impl<SampleStorage> SpecificChannels<
 pub type FlatSamplesPixel = SmallVec<[Sample; 8]>;
 
 // TODO also deep samples?
-impl Layer<AnyChannels<FlatSamples>> {
+impl<'a, 'b: 'a> Layer<AnyChannels<FlatSamples<'b>>> {
 
     /// Use `samples_at` if you can borrow from this layer
-    pub fn sample_vec_at(&self, position: Vec2<usize>) -> FlatSamplesPixel {
+    pub fn sample_vec_at(&'a self, position: Vec2<usize>) -> FlatSamplesPixel {
         self.samples_at(position).collect()
     }
 
     /// Lookup all channels of a single pixel in the image
-    pub fn samples_at(&self, position: Vec2<usize>) -> FlatSampleIterator<'_> {
+    pub fn samples_at(&'a self, position: Vec2<usize>) -> FlatSampleIterator<'a, 'b> {
         FlatSampleIterator {
             layer: self,
             channel_index: 0,
@@ -512,13 +513,13 @@ impl Layer<AnyChannels<FlatSamples>> {
 
 /// Iterate over all channels of a single pixel in the image
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct FlatSampleIterator<'s> {
-    layer: &'s Layer<AnyChannels<FlatSamples>>,
+pub struct FlatSampleIterator<'l, 's> {
+    layer: &'l Layer<AnyChannels<FlatSamples<'s>>>,
     channel_index: usize,
     position: Vec2<usize>,
 }
 
-impl Iterator for FlatSampleIterator<'_> {
+impl Iterator for FlatSampleIterator<'_, '_> {
     type Item = Sample;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -542,7 +543,7 @@ impl Iterator for FlatSampleIterator<'_> {
     }
 }
 
-impl ExactSizeIterator for FlatSampleIterator<'_> {}
+impl ExactSizeIterator for FlatSampleIterator<'_, '_> {}
 
 impl<SampleData> AnyChannels<SampleData>{
 
@@ -652,7 +653,7 @@ impl<Samples> RipMaps<Samples> {
     }
 }
 
-impl FlatSamples {
+impl FlatSamples<'_> {
 
     /// The number of samples in the image. Should be the width times the height.
     /// Might vary when subsampling is used.
@@ -849,7 +850,7 @@ impl<'s, SampleData: 's> AnyChannel<SampleData> {
     }*/
 }
 
-impl std::fmt::Debug for FlatSamples {
+impl std::fmt::Debug for FlatSamples<'_> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.len() <= 6 {
             match self {
@@ -1024,12 +1025,12 @@ pub mod validate_results {
         }
     }
 
-    impl ValidateResult for FlatSamples {
+    impl ValidateResult for FlatSamples<'_> {
         fn validate_result(&self, other: &Self, options: ValidationOptions, location: impl Fn()->String) -> ValidationResult {
             use FlatSamples::*;
             match (self, other) {
                 (F16(values), F16(other_values)) => values.as_slice().validate_result(&other_values.as_slice(), options, ||location() + " > f16 samples"),
-                (F32(values), F32(other_values)) => values.as_slice().validate_result(&other_values.as_slice(), options, ||location() + " > f32 samples"),
+                (F32(values), F32(other_values)) => values.as_ref().validate_result(&other_values.as_ref(), options, ||location() + " > f32 samples"),
                 (U32(values), U32(other_values)) => values.as_slice().validate_result(&other_values.as_slice(), options, ||location() + " > u32 samples"),
                 (own, other) => Err(format!("{}: samples type mismatch. expected {:?}, found {:?}", location(), own.sample_type(), other.sample_type()))
             }
@@ -1160,6 +1161,7 @@ pub mod validate_results {
 
     #[cfg(test)]
     mod test_value_result {
+        use std::borrow::Cow;
         use std::f32::consts::*;
         use std::io::Cursor;
         use crate::image::pixel_vec::PixelVec;
@@ -1243,8 +1245,8 @@ pub mod validate_results {
             print_error(&2.0, &1.0, true);
             print_error(&2.0, &1.0, false);
 
-            print_error(&FlatSamples::F32(vec![0.1,0.1]), &FlatSamples::F32(vec![0.1,0.2]), false);
-            print_error(&FlatSamples::U32(vec![0,0]), &FlatSamples::F32(vec![0.1,0.2]), false);
+            print_error(&FlatSamples::F32(Cow::Owned(vec![0.1,0.1])), &FlatSamples::F32(Cow::Owned(vec![0.1,0.2])), false);
+            print_error(&FlatSamples::U32(vec![0,0]), &FlatSamples::F32(Cow::Owned(vec![0.1,0.2])), false);
 
             {
                 let image = crate::prelude::read_all_data_from_file("tests/images/valid/openexr/MultiResolution/Kapaa.exr").unwrap();
@@ -1255,7 +1257,7 @@ pub mod validate_results {
 
                 match samples {
                     FlatSamples::F16(vals) => vals[100] = vals[1],
-                    FlatSamples::F32(vals) => vals[100] = vals[1],
+                    FlatSamples::F32(vals) => vals.to_mut()[100] = vals[1],
                     FlatSamples::U32(vals) => vals[100] = vals[1],
                 }
 
@@ -1305,19 +1307,19 @@ pub mod validate_results {
 
             fn accepts_validatable_value(_: &impl ValidateResult){}
 
-            let object: Levels<FlatSamples> = Levels::Singular(FlatSamples::F32(Vec::default()));
+            let object: Levels<FlatSamples<'_>> = Levels::Singular(FlatSamples::F32(Cow::Owned(Vec::default())));
             accepts_validatable_value(&object);
 
-            let object: AnyChannels<Levels<FlatSamples>> = AnyChannels::sort(SmallVec::default());
+            let object: AnyChannels<Levels<FlatSamples<'_>>> = AnyChannels::sort(SmallVec::default());
             accepts_validatable_value(&object);
 
-            let layer: Layer<AnyChannels<Levels<FlatSamples>>> = Layer::new((0,0), Default::default(), Default::default(), object);
+            let layer: Layer<AnyChannels<Levels<FlatSamples<'_>>>> = Layer::new((0,0), Default::default(), Default::default(), object);
             accepts_validatable_value(&layer);
 
-            let layers: Layers<AnyChannels<Levels<FlatSamples>>> = Default::default();
+            let layers: Layers<AnyChannels<Levels<FlatSamples<'_>>>> = Default::default();
             accepts_validatable_value(&layers);
 
-            let object: Image<Layer<AnyChannels<Levels<FlatSamples>>>> = Image::from_layer(layer);
+            let object: Image<Layer<AnyChannels<Levels<FlatSamples<'_>>>>> = Image::from_layer(layer);
             object.assert_equals_result(&object);
         }
     }

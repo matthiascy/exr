@@ -51,13 +51,13 @@ pub trait SamplesWriter: Sync {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct FlatSamplesWriter<'samples> {
     resolution: Vec2<usize>, // respects resolution level
-    samples: &'samples FlatSamples
+    samples: &'samples FlatSamples<'samples>
 }
 
 
 
 // used if no layers are used and the flat samples are directly inside the channels
-impl<'samples> WritableSamples<'samples> for FlatSamples {
+impl<'samples> WritableSamples<'samples> for FlatSamples<'_> {
     fn sample_type(&self) -> SampleType {
         match self {
             FlatSamples::F16(_) => SampleType::F16,
@@ -78,7 +78,7 @@ impl<'samples> WritableSamples<'samples> for FlatSamples {
 }
 
 // used if layers are used and the flat samples are inside the levels
-impl<'samples> WritableLevel<'samples> for FlatSamples {
+impl<'samples> WritableLevel<'samples> for FlatSamples<'_> {
     fn sample_type(&self) -> SampleType {
         match self {
             FlatSamples::F16(_) => SampleType::F16,

@@ -63,7 +63,7 @@ use crate::block::samples::FromNativeSample;
 /// All resolution levels, all channels, all layers.
 /// Does not support deep data yet. Uses parallel decompression and relaxed error handling.
 /// Inspect the source code of this function if you need customization.
-pub fn read_all_data_from_file(path: impl AsRef<Path>) -> Result<AnyImage> {
+pub fn read_all_data_from_file(path: impl AsRef<Path>) -> Result<AnyImage<'static>> {
     read()
         .no_deep_data() // TODO deep data
         .all_resolution_levels()
@@ -77,7 +77,7 @@ pub fn read_all_data_from_file(path: impl AsRef<Path>) -> Result<AnyImage> {
 /// No deep data, no resolution levels, all channels, all layers.
 /// Uses parallel decompression and relaxed error handling.
 /// Inspect the source code of this function if you need customization.
-pub fn read_all_flat_layers_from_file(path: impl AsRef<Path>) -> Result<FlatImage> {
+pub fn read_all_flat_layers_from_file(path: impl AsRef<Path>) -> Result<FlatImage<'static>> {
     read()
         .no_deep_data()
         .largest_resolution_level()
@@ -90,7 +90,7 @@ pub fn read_all_flat_layers_from_file(path: impl AsRef<Path>) -> Result<FlatImag
 /// No deep data, no resolution levels, all channels, first layer.
 /// Uses parallel decompression and relaxed error handling.
 /// Inspect the source code of this function if you need customization.
-pub fn read_first_flat_layer_from_file(path: impl AsRef<Path>) -> Result<Image<Layer<AnyChannels<FlatSamples>>>> {
+pub fn read_first_flat_layer_from_file(path: impl AsRef<Path>) -> Result<Image<Layer<AnyChannels<FlatSamples<'static>>>>> {
     read()
         .no_deep_data()
         .largest_resolution_level()
