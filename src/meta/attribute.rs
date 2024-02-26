@@ -96,8 +96,7 @@ pub enum AttributeValue {
 }
 
 /// A byte array with each byte being a char.
-/// This is not UTF an must be constructed from a standard string.
-// TODO is this ascii? use a rust ascii crate?
+// TODO allow valid utf8
 #[derive(Clone, PartialEq, Ord, PartialOrd, Default)] // hash implemented manually
 pub struct Text {
     bytes: TextBytes,
@@ -429,11 +428,8 @@ impl Text {
     /// Create a `Text` from an `str` reference.
     /// Returns `None` if this string contains unsupported chars.
     pub fn new_or_none(string: impl AsRef<str>) -> Option<Self> {
-        let vec : Option<TextBytes> = string.as_ref().chars()
-            .map(|character| u8::try_from(character as u64).ok())
-            .collect();
-
-        vec.map(Self::from_bytes_unchecked)
+        // str is guaranteed to be valid utf8
+        Some(Self::from_bytes_unchecked(SmallVec::from_slice(string.as_ref().as_bytes())))
     }
 
     /// Create a `Text` from an `str` reference.
