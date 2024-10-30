@@ -547,6 +547,11 @@ impl ExactSizeIterator for FlatSampleIterator<'_, '_> {}
 
 impl<SampleData> AnyChannels<SampleData>{
 
+    /// A single channel.
+    pub fn single_channel(channel: AnyChannel<SampleData>) -> Self {
+        AnyChannels { list: smallvec![channel] }
+    }
+
     /// A new list of arbitrary channels. Sorts the list to make it alphabetically stable.
     pub fn sort(mut list: SmallVec<[AnyChannel<SampleData>; 4]>) -> Self {
         list.sort_unstable_by_key(|channel| channel.name.clone()); // TODO no clone?
